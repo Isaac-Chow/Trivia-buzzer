@@ -5,194 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alliance Game Show</title>
     <script src="/socket.io/socket.io.js"></script>
-    <style>
-        * { 
-            box-sizing: border-box; 
-            font-family: system-ui, -apple-system, sans-serif; 
-            margin: 0; 
-            padding: 0; 
-        }
-        body { 
-            background: #121212; 
-            color: #ffffff; 
-            padding: 20px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-height: 100vh; 
-        }
-        .container { 
-            width: 100%; 
-            max-width: 600px; 
-            display: none; 
-            background: #1e1e1e; 
-            padding: 25px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
-        }
-        h1, h2, h3 { 
-            text-align: center; 
-            margin-bottom: 20px; 
-        }
-
-        /* Non-blocking Countdown Banner Styling */
-        #countdown-banner {
-            display: none;
-            width: 100%;
-            background: #ffc107;
-            color: #000000;
-            padding: 15px;
-            font-size: 24px;
-            font-weight: 900;
-            text-align: center;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 0 15px rgba(255, 193, 7, 0.4);
-            animation: flash 0.5s ease-in-out infinite alternate;
-        }
-        @keyframes flash {
-            from { opacity: 0.85; }
-            to { opacity: 1; transform: scale(1.01); }
-        }
-
-        .grid-2x2 { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            margin-bottom: 15px; 
-        }
-        .btn { 
-            padding: 25px; 
-            font-size: 28px; 
-            font-weight: bold; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            background: #333333; 
-            color: white; 
-            transition: background 0.2s, transform 0.1s; 
-        }
-        .btn:active {
-            transform: scale(0.98);
-        }
-        .btn.selected { 
-            background: #007bff; 
-            box-shadow: 0 0 15px rgba(0, 123, 255, 0.6); 
-        }
-        .btn:disabled { 
-            opacity: 0.2; 
-            cursor: not-allowed; 
-        }
-        .btn-submit { 
-            width: 100%; 
-            padding: 20px; 
-            font-size: 22px; 
-            background: #28a745; 
-            color: white; 
-            border: none; 
-            border-radius: 8px; 
-            font-weight: bold; 
-            cursor: pointer; 
-        }
-        .btn-submit:disabled { 
-            background: #444444; 
-            color: #888888;
-            cursor: not-allowed; 
-        }
-        .alliance-picker { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-            width: 100%; 
-            max-width: 400px; 
-            margin-top: 50px; 
-        }
-        .color-btn { 
-            padding: 18px; 
-            font-size: 20px; 
-            border: none; 
-            border-radius: 8px; 
-            color: white; 
-            font-weight: bold; 
-            cursor: pointer; 
-        }
-        .layout-wrapper { 
-            display: flex; 
-            width: 100%; 
-            max-width: 900px; 
-            gap: 20px; 
-        }
-        .main-panel { 
-            flex: 2; 
-        }
-        .sidebar { 
-            flex: 1; 
-            background: #222222; 
-            padding: 20px; 
-            border-radius: 12px; 
-            height: fit-content; 
-        }
-        .score-row { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 12px 0; 
-            border-bottom: 1px solid #333333; 
-            font-size: 18px; 
-        }
-        .host-controls { 
-            display: flex; 
-            gap: 15px;
-        }
-        .btn-host { 
-            flex: 1; 
-            padding: 18px; 
-            font-size: 18px; 
-            font-weight: bold; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-        }
-        .score-edit-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #2a2a2a;
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-        .score-edit-input { 
-            width: 80px; 
-            padding: 8px; 
-            text-align: center; 
-            background: #121212; 
-            color: white; 
-            border: 1px solid #555555; 
-            border-radius: 6px; 
-            font-size: 16px;
-        }
-        .queue-item { 
-            background: #2a2a2a; 
-            padding: 12px; 
-            border-radius: 6px; 
-            margin-bottom: 8px; 
-            display: flex; 
-            flex-direction: column;
-            gap: 4px;
-            border-left: 6px solid transparent; 
-        }
-        
-        @media (max-width: 768px) {
-            .layout-wrapper { flex-direction: column; }
-            .sidebar { margin-top: 15px; }
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
-    <!-- ROLE SELECTION INITIAL SCREEN -->
+    <div id="countdown-banner">Time Remaining: <span id="countdown-number">3</span>s</div>
+
+    <!-- INITIAL ALLIANCE PICKER -->
     <div id="setup-screen" class="alliance-picker">
         <h2>Choose Your Alliance</h2>
         <button class="color-btn" style="background:#dc3545" onclick="selectAlliance('Red')">Red Alliance</button>
@@ -201,15 +20,11 @@
         <button class="color-btn" style="background:#28a745" onclick="selectAlliance('Green')">Green Alliance</button>
     </div>
 
-    <!-- PARTICIPANT INTERFACE -->
+    <!-- PARTICIPANTS PANEL -->
     <div id="participant-ui" class="layout-wrapper container">
         <div class="main-panel">
-            <!-- ACTIVE LIVE COUNTDOWN BAR -->
-            <div id="countdown-banner">Time Remaining: <span id="countdown-number">3</span>s</div>
-
             <h1 id="alliance-banner" style="padding: 12px; border-radius: 8px; margin-bottom: 15px;">Your Screen</h1>
             <h3 id="status-text" style="color: #aaaaaa; font-weight: normal;">Waiting for host...</h3>
-            
             <div class="grid-2x2">
                 <button class="btn option-btn" data-opt="A" onclick="toggleOption('A')" disabled>A</button>
                 <button class="btn option-btn" data-opt="B" onclick="toggleOption('B')" disabled>B</button>
@@ -224,13 +39,40 @@
         </div>
     </div>
 
-    <!-- HOST INTERFACE -->
+    <!-- HOST CONFIGURATION DASHBOARD -->
     <div id="host-ui" class="container" style="max-width: 850px;">
         <h1>Host Control Dashboard</h1>
-        <div class="host-controls">
-            <button class="btn-host" style="background:#28a745; color:white" onclick="startRound()">▶ Start</button>
-            <button class="btn-host" style="background:#ffc107; color:black" onclick="triggerCountdown()">⏳ Countdown</button>
-            <button class="btn-host" style="background:#dc3545; color:white" onclick="stopRound()">⏹ Stop</button>
+        
+        <div class="settings-card">
+            <strong>Game Point Grid Matrix Configurations</strong>
+            <div class="settings-grid">
+                <div class="setting-field"><label>Correct</label><input type="number" id="rule-correct" value="1" oninput="recalculateScores()"></div>
+                <div class="setting-field"><label>First + Correct</label><input type="number" id="rule-first" value="2" oninput="recalculateScores()"></div>
+                <div class="setting-field"><label>Incorrect</label><input type="number" id="rule-incorrect" value="0" oninput="recalculateScores()"></div>
+                <div class="setting-field"><label>No Answer</label><input type="number" id="rule-noanswer" value="0" oninput="recalculateScores()"></div>
+            </div>
+        </div>
+
+        <!-- TWO-TIER RUNTIME HOST CONTROLS -->
+        <div style="margin-bottom: 25px;">
+            <!-- Tier 1: Master Control Fallbacks -->
+            <div class="host-controls" style="margin-bottom: 10px;">
+                <button class="btn-host" style="background:#28a745; color:white;" onclick="startRound()">▶ Start</button>
+                <button class="btn-host" style="background:#ffc107; color:black;" onclick="triggerCountdown()">⏳ Countdown</button>
+                <button class="btn-host" style="background:#dc3545; color:white;" onclick="stopRound()">⏹ Stop</button>
+            </div>
+            <!-- Tier 2: Automated Workflow Driver -->
+            <button id="host-state-btn" class="btn-host" style="background:#28a745; color:white; width:100%; padding:18px;" onclick="handleSmartButtonClick()">▶ Start Round</button>
+        </div>
+
+        <div style="background:#222; padding:10px; border-radius:8px; margin-bottom:20px;">
+            <p style="text-align:center; font-size:14px; color:#aaa;">Input Question Model Answer Key:</p>
+            <div class="host-answer-matrix">
+                <label class="matrix-label"><input type="checkbox" class="matrix-box" value="A" onchange="modelAnswerChanged()"> A</label>
+                <label class="matrix-label"><input type="checkbox" class="matrix-box" value="B" onchange="modelAnswerChanged()"> B</label>
+                <label class="matrix-label"><input type="checkbox" class="matrix-box" value="C" onchange="modelAnswerChanged()"> C</label>
+                <label class="matrix-label"><input type="checkbox" class="matrix-box" value="D" onchange="modelAnswerChanged()"> D</label>
+            </div>
         </div>
         
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 25px;">
@@ -241,11 +83,11 @@
             <div>
                 <h3 style="text-align: left;">Score Adjustment</h3>
                 <div id="host-score-modifiers" style="margin-top:10px;"></div>
-                <button class="btn-submit" style="margin-top:15px; padding:12px; font-size:18px;" onclick="saveScores()">Save & Sync Scores</button>
+                <button class="btn-submit" style="margin-top:15px; padding:12px; font-size:16px; background:#495057;" onclick="saveScores()">Sync Manual Inputs</button>
             </div>
         </div>
     </div>
 
-    <script src="/client.js"></script>
+    <script src="./client.js"></script>
 </body>
 </html>

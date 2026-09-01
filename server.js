@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 
 let gameState = {
     roundActive: false,
+    answersReleased: false,
+    modelAnswers: [],
     submissions: [],
     scores: { Red: 0, Blue: 0, Yellow: 0, Green: 0 }
 };
@@ -22,23 +24,25 @@ app.use(express.static(path.join(__dirname, 'public')));
 io.on('connection', (socket) => {
     socket.emit('init_state', gameState);
 
-    // Host: Start Round
     socket.on('start_round', () => {
         if (countdownTimer) clearInterval(countdownTimer);
         gameState.roundActive = true;
+        gameState.answersReleased = false; // CRITICAL: Reset this so new rounds start totally clean
+        gameState.modelAnswers = [];
         gameState.submissions = [];
         io.emit('round_started', gameState);
     });
 
-    // Host: Trigger 3-Second Countdown
+    socket.on('update_model_answers', (answers) => {
+        gameState.modelAnswers = answers;
+        io.emit('model_answers_updated', gameState.modelAnswers);
+    });
+
     socket.on('trigger_countdown', () => {
         if (!gameState.roundActive) return;
-        
         let timeLeft = 3;
         io.emit('countdown_tick', timeLeft);
-
         if (countdownTimer) clearInterval(countdownTimer);
-        
         countdownTimer = setInterval(() => {
             timeLeft--;
             if (timeLeft > 0) {
@@ -52,7 +56,6 @@ io.on('connection', (socket) => {
         }, 1000);
     });
 
-    // Host: Manual Stop Round
     socket.on('stop_round', () => {
         if (countdownTimer) clearInterval(countdownTimer);
         gameState.roundActive = false;
@@ -64,12 +67,19 @@ io.on('connection', (socket) => {
         io.emit('scores_updated', gameState.scores);
     });
 
+    socket.on('push_and_release', (data) => {
+        gameState.scores = data.finalScores;
+        gameState.answersReleased = true;
+        io.emit('answers_released', {
+            scores: gameState.scores,
+            modelAnswers: gameState.modelAnswers
+        });
+    });
+
     socket.on('submit_answer', (data) => {
         if (!gameState.roundActive) return;
-
         const alreadySubmitted = gameState.submissions.some(s => s.alliance === data.alliance);
         if (alreadySubmitted) return;
-
         const timestamp = new Date().toLocaleTimeString();
         gameState.submissions.push({
             alliance: data.alliance,
