@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Control Panel</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="./host.css">
+</head>
+<body>
+
+    <div id="host-ui" class="container">
+        <h1>Host Control Dashboard</h1>
+        
+        <div class="host-nav">
+            <button class="nav-tab active" onclick="switchTab('control-tab')">🎛️ Control Panel</button>
+            <button class="nav-tab" onclick="switchTab('settings-tab')">⚙️ Match Settings</button>
+        </div>
+
+        <!-- TAB 1: OPERATIONAL HUB -->
+        <div id="control-tab" class="tab-content active">
+            <div class="clocks-grid">
+                <div id="h-timer-Red" class="timer-wrapper red-border"><div class="label">RED</div><div class="timer-display"><span id="time-Red">--</span>s</div></div>
+                <div id="h-timer-Blue" class="timer-wrapper blue-border"><div class="label">BLUE</div><div class="timer-display"><span id="time-Blue">--</span>s</div></div>
+                <div id="h-timer-Yellow" class="timer-wrapper yellow-border"><div class="label" style="color:black;">YELLOW</div><div class="timer-display" style="color:white;"><span id="time-Yellow">--</span>s</div></div>
+                <div id="h-timer-Green" class="timer-wrapper green-border"><div class="label">GREEN</div><div class="timer-display"><span id="time-Green">--</span>s</div></div>
+            </div>
+
+            <div class="settings-card flex-row">
+                <label>⏱️ Next Round Time Override:</label>
+                <input type="number" id="host-round-override" value="15">
+            </div>
+
+            <div class="controls-block">
+                <div class="host-controls">
+                    <button class="btn-host start-btn" onclick="startRound()">▶ Start</button>
+                    <button class="btn-host countdown-btn" onclick="triggerCountdown()">⏳ Countdown</button>
+                    <button class="btn-host stop-btn" onclick="stopRound()">⏹ Stop</button>
+                </div>
+                <button id="host-state-btn" class="btn-submit-smart" onclick="handleSmartButtonClick()">▶ Start Round</button>
+            </div>
+
+            <div class="matrix-box-container">
+                <p>Input Question Model Answer Key:</p>
+                <div class="host-answer-matrix">
+                    <label class="matrix-label"><input type="checkbox" class="matrix-box" value="A" onchange="modelAnswerChanged()"> A</label>
+                    <label class="matrix-label"><input type="checkbox" class="matrix-box" value="B" onchange="modelAnswerChanged()"> B</label>
+                    <label class="matrix-label"><input type="checkbox" class="matrix-box" value="C" onchange="modelAnswerChanged()"> C</label>
+                    <label class="matrix-label"><input type="checkbox" class="matrix-box" value="D" onchange="modelAnswerChanged()"> D</label>
+                </div>
+            </div>
+            
+            <div class="two-columns">
+                <div class="column">
+                    <h3>Submission Queue</h3>
+                    <div id="submission-queue"></div>
+                </div>
+                <div class="column">
+                    <h3>Live Scoreboards</h3>
+                    <div id="host-score-modifiers"></div>
+                    <button class="btn-sync" onclick="saveScores()">Sync Changes Manually</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: GAME PARAMETERS -->
+        <div id="settings-tab" class="tab-content">
+            <!-- ACTIVE ALLIANCES MANAGE MATRIX CARD -->
+            <div class="settings-card">
+                <strong style="display:block; margin-bottom:10px;">👥 Active Playing Alliances</strong>
+                <p style="font-size:12px; color:#777; margin-bottom:12px;">Unchecked alliances will be completely hidden from dashboards and skipped during round tracking automation metrics loops.</p>
+                <div style="display:flex; gap:20px; background:#111; padding:12px; border-radius:6px; justify-content:space-around;">
+                    <label style="cursor:pointer; font-weight:bold; color:#dc3545;"><input type="checkbox" class="active-alliance-cb" value="Red" checked onchange="pushSettingsUpdate()"> Red</label>
+                    <label style="cursor:pointer; font-weight:bold; color:#007bff;"><input type="checkbox" class="active-alliance-cb" value="Blue" checked onchange="pushSettingsUpdate()"> Blue</label>
+                    <label style="cursor:pointer; font-weight:bold; color:#ffc107;"><input type="checkbox" class="active-alliance-cb" value="Yellow" onchange="pushSettingsUpdate()"> Yellow</label>
+                    <label style="cursor:pointer; font-weight:bold; color:#28a745;"><input type="checkbox" class="active-alliance-cb" value="Green" onchange="pushSettingsUpdate()"> Green</label>
+                </div>
+            </div>
+
+            <!-- TIMING RULES CONFIGURATION CARD -->
+            <div class="settings-card">
+                <strong>⏱️ Timing Parameters</strong>
+                <div class="setting-field" style="margin-top: 10px;">
+                    <label>Baseline Round Limit (Seconds)</label>
+                    <input type="number" id="setting-default-time" value="15" oninput="pushSettingsUpdate()">
+                </div>
+            </div>
+
+            <!-- RULES ALLOCATION CARD -->
+            <div class="settings-card">
+                <strong>🎯 Rules Allocation Matrix</strong>
+                <div class="settings-grid">
+                    <div class="setting-field"><label>Correct Match</label><input type="number" id="rule-correct" value="1" oninput="recalculateScores()"></div>
+                    <div class="setting-field"><label>First + Correct</label><input type="number" id="rule-first" value="2" oninput="recalculateScores()"></div>
+                    <div class="setting-field"><label>Incorrect</label><input type="number" id="rule-incorrect" value="0" oninput="recalculateScores()"></div>
+                    <div class="setting-field"><label>No Answer</label><input type="number" id="rule-noanswer" value="0" oninput="recalculateScores()"></div>
+                </div>
+            </div>
+
+            <!-- POWER-UPS MATRIX CARD CONTAINER -->
+            <div class="settings-card">
+                <strong style="display:block; margin-bottom:15px; color:#ffc107; font-size:16px;">⚡ Power-Ups Inventory Configurations</strong>
+                
+                <!-- Power-Up 1: Extra Time -->
+                <div style="background:#1a1a1a; padding:15px; border-radius:8px; border-left:4px solid #ffc107; margin-bottom: 15px;">
+                    <h4 style="margin-bottom:10px; color:#fff;">⏳ Extra Time Power-Up</h4>
+                    <div class="settings-grid">
+                        <div class="setting-field">
+                            <label>Max Uses Per Game</label>
+                            <input type="number" id="setting-extratime-uses" value="0" min="0" oninput="pushSettingsUpdate()">
+                        </div>
+                        <div class="setting-field">
+                            <label>Extra Seconds Granted</label>
+                            <input type="number" id="setting-extratime-value" value="20" min="1" oninput="pushSettingsUpdate()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Power-Up 2: STOP!!! -->
+                <div style="background:#1a1a1a; padding:15px; border-radius:8px; border-left:4px solid #dc3545;">
+                    <h4 style="margin-bottom:10px; color:#fff;">🛑 "STOP!!!" Power-Up</h4>
+                    <div class="setting-field" style="max-width: 200px;">
+                        <label>Max Uses Per Game (0 = Disabled)</label>
+                        <input type="number" id="setting-stopcard-uses" value="0" min="0" oninput="pushSettingsUpdate()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="./host.js"></script>
+</body>
+</html>

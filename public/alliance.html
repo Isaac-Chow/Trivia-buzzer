@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alliance Player Screen</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="./alliance.css">
+</head>
+<body>
+
+    <!-- INITIAL ALLIANCE PICKER -->
+    <div id="setup-screen" class="alliance-picker">
+        <h2>Choose Your Alliance</h2>
+        <button id="pick-Red" class="color-btn" style="background:#dc3545" onclick="selectAlliance('Red')">Red Alliance</button>
+        <button id="pick-Blue" class="color-btn" style="background:#007bff" onclick="selectAlliance('Blue')">Blue Alliance</button>
+        <button id="pick-Yellow" class="color-btn" style="background:#ffc107; color:black" onclick="selectAlliance('Yellow')">Yellow Alliance</button>
+        <button id="pick-Green" class="color-btn" style="background:#28a745" onclick="selectAlliance('Green')">Green Alliance</button>
+    </div>
+
+    <!-- MAIN PARTICIPANT INTERFACE -->
+    <div id="participant-ui" class="layout-wrapper container" style="display: none;">
+        <div class="main-panel">
+            <div id="p-timer-box" class="timer-wrapper">
+                <div class="timer-display" id="p-timer-text">TIME REMAINING: <span id="p-time-count">--</span>s</div>
+            </div>
+
+            <h1 id="alliance-banner">Your Screen</h1>
+            <h3 id="status-text" style="margin-bottom: 15px;">Waiting for host...</h3>
+            
+            <div class="grid-2x2">
+                <button class="btn option-btn" data-opt="A" onclick="toggleOption('A')" disabled>A</button>
+                <button class="btn option-btn" data-opt="B" onclick="toggleOption('B')" disabled>B</button>
+                <button class="btn option-btn" data-opt="C" onclick="toggleOption('C')" disabled>C</button>
+                <button class="btn option-btn" data-opt="D" onclick="toggleOption('D')" disabled>D</button>
+            </div>
+            <button id="submit-action-btn" class="btn-submit" onclick="submitAnswer()" disabled>None of the above</button>
+
+            <!-- EMBEDDED IFRAME TARGET SLOL -->
+            <iframe id="p-powerup-iframe" style="display: none; width: 100%; height: 260px; border: none; margin-top: 20px; border-radius: 8px; background: #1a1a1a;"></iframe>
+        </div>
+        <div class="sidebar">
+            <h3>Alliance Scores</h3>
+            <div id="participant-scores"></div>
+            
+            <button id="toggle-powerup-btn" onclick="togglePowerUpIframe()" style="width: 100%; margin-top: 15px; padding: 10px; font-size: 13px; font-weight: bold; background: #333; color: #fff; border: 1px solid #555; border-radius: 6px; cursor: pointer;">
+                ⚡ Show Power-Ups
+            </button>
+        </div>
+    </div>
+
+    <script src="./alliance.js"></script>
+</body>
+</html>
