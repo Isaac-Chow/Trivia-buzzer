@@ -21,14 +21,15 @@ let gameState = {
     teamTimers: { Red: 15, Blue: 15, Yellow: 15, Green: 15 },
     activeAlliances: ['Red', 'Blue'], 
     powerUpSettings: {
-        extraTime: { maxUses: 0, value: 20 },
-        stopCard: { maxUses: 0 }
+        extraTime: { maxUses: 3, value: 20 },
+        stopCard: { maxUses: 3 },
+        doubleRisk: { maxUses: 3, penalty: 5 }
     },
     teamPowerUps: {
-        Red: { extraTime: { remaining: 0 }, stopCard: { remaining: 0 } },
-        Blue: { extraTime: { remaining: 0 }, stopCard: { remaining: 0 } },
-        Yellow: { extraTime: { remaining: 0 }, stopCard: { remaining: 0 } },
-        Green: { extraTime: { remaining: 0 }, stopCard: { remaining: 0 } }
+        Red: { extraTime: { remaining: 3 }, stopCard: { remaining: 3 }, doubleRisk: { remaining: 3, activeInRound: false } },
+        Blue: { extraTime: { remaining: 3 }, stopCard: { remaining: 3 }, doubleRisk: { remaining: 3, activeInRound: false } },
+        Yellow: { extraTime: { remaining: 3 }, stopCard: { remaining: 3 }, doubleRisk: { remaining: 3, activeInRound: false } },
+        Green: { extraTime: { remaining: 3 }, stopCard: { remaining: 3 }, doubleRisk: { remaining: 3, activeInRound: false } }
     }
 };
 
@@ -47,6 +48,16 @@ app.get('/host', (req, res) => {
 app.get('/powerup', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'powerup.html'));
 });
+
+// Precision Timestamp Parser to generate exact two decimal spaces for seconds
+function getPrecisionTimestamp() {
+    const now = new Date();
+    const hrs = String(now.getHours()).padStart(2, '0');
+    const mins = String(now.getMinutes()).padStart(2, '0');
+    const secs = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(Math.floor(now.getMilliseconds() / 10)).padStart(2, '0');
+    return `${hrs}:${mins}:${secs}.${ms}`;
+}
 
 function checkAutoStopConditions() {
     const activeTeams = gameState.activeAlliances;
@@ -83,8 +94,11 @@ io.on('connection', (socket) => {
         gameState.modelAnswers = [];
         gameState.submissions = [];
         
+        ['Red', 'Blue', 'Yellow', 'Green'].forEach(color => {
+            gameState.teamPowerUps[color].doubleRisk.activeInRound = false;
+        });
+
         gameState.nextRoundTime = parseInt(customTime) || gameState.defaultTime;
-        
         gameState.activeAlliances.forEach(color => {
             gameState.teamTimers[color] = gameState.nextRoundTime;
         });
@@ -127,11 +141,16 @@ io.on('connection', (socket) => {
             gameState.powerUpSettings = settings.powerUpSettings;
             
             ['Red', 'Blue', 'Yellow', 'Green'].forEach(color => {
-                if (!gameState.teamPowerUps[color]) gameState.teamPowerUps[color] = { extraTime: { remaining: 0 }, stopCard: { remaining: 0 } };
-                if (!gameState.teamPowerUps[color].stopCard) gameState.teamPowerUps[color].stopCard = { remaining: 0 };
-                
+                if (!gameState.teamPowerUps[color]) {
+                    gameState.teamPowerUps[color] = { 
+                        extraTime: { remaining: 0 }, 
+                        stopCard: { remaining: 0 }, 
+                        doubleRisk: { remaining: 0, activeInRound: false } 
+                    };
+                }
                 gameState.teamPowerUps[color].extraTime.remaining = settings.powerUpSettings.extraTime.maxUses;
                 gameState.teamPowerUps[color].stopCard.remaining = settings.powerUpSettings.stopCard.maxUses;
+                gameState.teamPowerUps[color].doubleRisk.remaining = settings.powerUpSettings.doubleRisk.maxUses;
             });
         }
         io.emit('settings_synced', gameState);
@@ -148,20 +167,15 @@ io.on('connection', (socket) => {
         }
     });
 
-    // WATERPROOF TARGET BLOCK: Safely nested inside the main connection function block
-      socket.on('activate_powerup', (data) => {
+    socket.on('activate_powerup', (data) => {
         const color = data.alliance;
         const type = data.type; 
 
-        // CRITICAL FIX: The round must be active, but we REMOVED timerRunning 
-        // from the global gate so HALT can fire before the clock ticks!
-        if (!gameState.roundActive) return;
         if (!gameState.activeAlliances.includes(color)) return;
 
         // --- POWER UP 1: EXTRA TIME ---
         if (type === 'extraTime') {
-            // Extra Time still requires the timer to be actively running to work
-            if (!gameState.timerRunning) return;
+            if (!gameState.roundActive || !gameState.timerRunning) return;
 
             const alreadySubmitted = gameState.submissions.some(s => s.alliance === color);
             if (alreadySubmitted) return;
@@ -172,23 +186,58 @@ io.on('connection', (socket) => {
             if (config.maxUses > 0 && inventory.remaining > 0) {
                 inventory.remaining--;
                 gameState.teamTimers[color] += config.value;
+                
+                gameState.submissions.forEach(s => {
+                    if (s.alliance === color) s.powerUsed = (s.powerUsed || "") + " [Extra Time]";
+                });
+
                 io.emit('powerup_activated', { alliance: color, type: type, gameState: gameState });
             }
         }
         
         // --- POWER UP 2: STOP!!! ---
         else if (type === 'stopCard') {
+            if (!gameState.roundActive) return;
+
             const inventory = gameState.teamPowerUps[color].stopCard;
             const config = gameState.powerUpSettings.stopCard;
 
             if (config.maxUses > 0 && inventory.remaining > 0) {
                 inventory.remaining--;
+                
+                gameState.submissions.forEach(s => {
+                    if (s.alliance === color) s.powerUsed = (s.powerUsed || "") + " [STOP!!! Halt]";
+                });
+
                 io.emit('powerup_activated', { alliance: color, type: type, gameState: gameState });
-                stopRoundExecution(); // Instantly freezes the game board
+                stopRoundExecution(); 
             }
         }
-    });
 
+        // --- POWER UP 3: DOUBLE OR DEDUCT ---
+                // --- POWER UP 3: DOUBLE OR DEDUCT ---
+        else if (type === 'doubleRisk') {
+            // TARGET SAFETY FIX: Blocks if answers are released OR if a new round has not started yet.
+            // If answersReleased is false, but roundActive is false and submissions are empty, it means we are in the idle start state.
+            if (gameState.answersReleased) return;
+            
+            // If the round is not active AND no entries have been submitted yet, they are trying to cheat-click before a match starts!
+            if (!gameState.roundActive && gameState.submissions.length === 0) return;
+
+            const inventory = gameState.teamPowerUps[color].doubleRisk;
+            const config = gameState.powerUpSettings.doubleRisk;
+            
+            if (inventory.activeInRound) return;
+
+            if (config.maxUses > 0 && inventory.remaining > 0) {
+                inventory.remaining--;
+                inventory.activeInRound = true;
+
+                io.emit('powerup_activated', { alliance: color, type: type, gameState: gameState });
+            }
+        }
+
+    });
 
     socket.on('update_model_answers', (answers) => {
         gameState.modelAnswers = answers;
@@ -208,10 +257,16 @@ io.on('connection', (socket) => {
         const alreadySubmitted = gameState.submissions.some(s => s.alliance === data.alliance);
         if (alreadySubmitted) return;
 
+        let tag = "";
+        if (gameState.teamPowerUps[data.alliance].doubleRisk.activeInRound) {
+            tag = " [Double Risk Active]";
+        }
+
         gameState.submissions.push({
             alliance: data.alliance,
             answers: data.answers,
-            time: new Date().toLocaleTimeString()
+            time: getPrecisionTimestamp(), 
+            powerUsed: tag
         });
 
         io.emit('new_submission', gameState.submissions);

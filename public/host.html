@@ -97,7 +97,7 @@
                 </div>
             </div>
 
-            <!-- POWER-UPS MATRIX CARD CONTAINER -->
+            <!-- POWER-UPS CONFIGURATION MATRIX CARD -->
             <div class="settings-card">
                 <strong style="display:block; margin-bottom:15px; color:#ffc107; font-size:16px;">⚡ Power-Ups Inventory Configurations</strong>
                 
@@ -117,11 +117,26 @@
                 </div>
 
                 <!-- Power-Up 2: STOP!!! -->
-                <div style="background:#1a1a1a; padding:15px; border-radius:8px; border-left:4px solid #dc3545;">
+                <div style="background:#1a1a1a; padding:15px; border-radius:8px; border-left:4px solid #dc3545; margin-bottom: 15px;">
                     <h4 style="margin-bottom:10px; color:#fff;">🛑 "STOP!!!" Power-Up</h4>
                     <div class="setting-field" style="max-width: 200px;">
                         <label>Max Uses Per Game (0 = Disabled)</label>
                         <input type="number" id="setting-stopcard-uses" value="0" min="0" oninput="pushSettingsUpdate()">
+                    </div>
+                </div>
+
+                <!-- Power-Up 3: Double or Deduct -->
+                <div style="background:#1a1a1a; padding:15px; border-radius:8px; border-left:4px solid #28a745;">
+                    <h4 style="margin-bottom:10px; color:#28a745;">🎲 "Double or Deduct" Power-Up</h4>
+                    <div class="settings-grid">
+                        <div class="setting-field">
+                            <label>Max Uses Per Game (0 = Disabled)</label>
+                            <input type="number" id="setting-doublerisk-uses" value="0" min="0" oninput="pushSettingsUpdate()">
+                        </div>
+                        <div class="setting-field">
+                            <label>Incorrect Penalty Deduction Pts</label>
+                            <input type="number" id="setting-doublerisk-penalty" value="5" min="0" oninput="pushSettingsUpdate()">
+                        </div>
                     </div>
                 </div>
             </div>

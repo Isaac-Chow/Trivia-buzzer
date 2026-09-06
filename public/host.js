@@ -38,13 +38,17 @@ function pushSettingsUpdate() {
     const extraTimeValue = parseInt(document.getElementById('setting-extratime-value').value) || 20;
     const stopCardUses = parseInt(document.getElementById('setting-stopcard-uses').value) || 0;
     
+    const doubleRiskUses = parseInt(document.getElementById('setting-doublerisk-uses').value) || 0;
+    const doubleRiskPenalty = parseInt(document.getElementById('setting-doublerisk-penalty').value) || 5;
+    
     socket.emit('update_settings', { 
         defaultTime: defTime, 
         scores: serverScoresCache,
         activeAlliances: activeTeams,
         powerUpSettings: {
             extraTime: { maxUses: extraTimeUses, value: extraTimeValue },
-            stopCard: { maxUses: stopCardUses }
+            stopCard: { maxUses: stopCardUses },
+            doubleRisk: { maxUses: doubleRiskUses, penalty: doubleRiskPenalty }
         }
     });
 }
@@ -94,12 +98,46 @@ function recalculateScores() {
         const inputField = document.getElementById('edit-' + color);
         const badge = document.getElementById('badge-' + color);
         const baseScore = serverScoresCache[color] || 0;
-        const delta = calculatedDeltas[color];
         
+        let delta = calculatedDeltas[color];
+        let formulaLabel = "";
+
+        const isDoubleRiskActive = currentGameState && currentGameState.teamPowerUps && 
+                                   currentGameState.teamPowerUps[color] && currentGameState.teamPowerUps[color].doubleRisk &&
+                                   currentGameState.teamPowerUps[color].doubleRisk.activeInRound;
+
+        if (isDoubleRiskActive) {
+            const isCorrect = currentSubmissions.some(s => s.alliance === color && match(s.answers, hostModelAnswers));
+            const hasSubmitted = currentSubmissions.some(s => s.alliance === color);
+
+            // Evaluates retroactively even if they haven't submitted (treated as wrong/no answer penalty)
+            if (hasSubmitted) {
+                if (isCorrect) {
+                    formulaLabel = delta + "x2";
+                    delta = delta * 2;
+                } else {
+                    const penaltySetting = currentGameState.powerUpSettings.doubleRisk.penalty || 5;
+                    formulaLabel = "-" + penaltySetting;
+                    delta = -penaltySetting;
+                }
+            } else {
+                const penaltySetting = currentGameState.powerUpSettings.doubleRisk.penalty || 5;
+                formulaLabel = "-" + penaltySetting;
+                delta = -penaltySetting;
+            }
+        } else {
+            formulaLabel = (delta > 0 ? "+" : "") + delta;
+        }
+
         if(inputField) inputField.value = baseScore + delta;
         if(badge) {
-            if (delta !== 0) { badge.style.display = 'inline-block'; badge.innerText = (delta > 0 ? '+' : '') + delta; }
-            else { badge.style.display = 'none'; }
+            // FIX: Hide badge if final point addition delta resolves to 0 or formula is a neutral "+0"
+            if (delta !== 0 && formulaLabel !== "+0" && formulaLabel !== "-0") { 
+                badge.style.display = 'inline-block'; 
+                badge.innerText = formulaLabel; 
+            } else { 
+                badge.style.display = 'none'; 
+            }
         }
     });
 }
@@ -113,16 +151,9 @@ function pushAndRelease() {
     socket.emit('push_and_release', { finalScores: finalized });
 }
 
-function handleManualPowerChange(color, value) {
+function handleManualPowerChange(color, type, value) {
     const targetCount = parseInt(value);
-    if (currentGameState && currentGameState.teamPowerUps && currentGameState.teamPowerUps[color]) {
-        currentGameState.teamPowerUps[color].extraTime.remaining = isNaN(targetCount) ? 0 : targetCount;
-    }
-    socket.emit('manual_powerup_update', {
-        alliance: color,
-        type: 'extraTime',
-        count: targetCount
-    });
+    socket.emit('manual_powerup_update', { alliance: color, type: type, count: targetCount });
 }
 function updateSmartButtonUI(phase) {
     currentPhase = phase;
@@ -143,7 +174,6 @@ function renderUIBasedOnActiveAlliances(activeTeams) {
     ['Red', 'Blue', 'Yellow', 'Green'].forEach(color => {
         const timerCard = document.getElementById('h-timer-' + color);
         const cb = document.querySelector(`.active-alliance-cb[value="${color}"]`);
-        
         if (cb) cb.checked = activeTeams.includes(color);
         if (timerCard) timerCard.style.display = activeTeams.includes(color) ? 'block' : 'none';
     });
@@ -154,19 +184,22 @@ function openPowerUpModal(color) {
     
     const currentExtra = currentGameState.teamPowerUps[color].extraTime.remaining;
     const currentStop = currentGameState.teamPowerUps[color].stopCard ? currentGameState.teamPowerUps[color].stopCard.remaining : 0;
+    const currentRisk = currentGameState.teamPowerUps[color].doubleRisk ? currentGameState.teamPowerUps[color].doubleRisk.remaining : 0;
     
-    const targetItem = prompt("Type 1 to edit 'Extra Time' (" + currentExtra + " left)\nType 2 to edit 'STOP!!!' (" + currentStop + " left):", "1");
+    const menu = "Type 1 to edit 'Extra Time' (" + currentExtra + " left)\n" +
+                 "Type 2 to edit 'STOP!!!' (" + currentStop + " left)\n" +
+                 "Type 3 to edit 'Double Risk' (" + currentRisk + " left):";
+    const targetItem = prompt(menu, "1");
     
     if (targetItem === "1") {
-        const count = prompt("Enter new 'Extra Time' remaining count:", currentExtra);
-        if (count !== null) {
-            socket.emit('manual_powerup_update', { alliance: color, type: 'extraTime', count: count });
-        }
+        const count = prompt("Enter new 'Extra Time' count:", currentExtra);
+        if (count !== null) handleManualPowerChange(color, 'extraTime', count);
     } else if (targetItem === "2") {
-        const count = prompt("Enter new 'STOP!!!' remaining count:", currentStop);
-        if (count !== null) {
-            socket.emit('manual_powerup_update', { alliance: color, type: 'stopCard', count: count });
-        }
+        const count = prompt("Enter new 'STOP!!!' count:", currentStop);
+        if (count !== null) handleManualPowerChange(color, 'stopCard', count);
+    } else if (targetItem === "3") {
+        const count = prompt("Enter new 'Double Risk' count:", currentRisk);
+        if (count !== null) handleManualPowerChange(color, 'doubleRisk', count);
     }
 }
 
@@ -179,12 +212,14 @@ socket.on('init_state', function(state) {
     document.getElementById('setting-default-time').value = state.defaultTime;
     document.getElementById('host-round-override').value = state.nextRoundTime;
     
-    if (state.powerUpSettings && state.powerUpSettings.extraTime) {
-        document.getElementById('setting-extratime-uses').value = state.powerUpSettings.extraTime.maxUses;
-        document.getElementById('setting-extratime-value').value = state.powerUpSettings.extraTime.value;
-    }
-    if (state.powerUpSettings && state.powerUpSettings.stopCard) {
-        document.getElementById('setting-stopcard-uses').value = state.powerUpSettings.stopCard.maxUses;
+    if (state.powerUpSettings) {
+        if(state.powerUpSettings.extraTime) document.getElementById('setting-extratime-uses').value = state.powerUpSettings.extraTime.maxUses;
+        if(state.powerUpSettings.extraTime) document.getElementById('setting-extratime-value').value = state.powerUpSettings.extraTime.value;
+        if(state.powerUpSettings.stopCard) document.getElementById('setting-stopcard-uses').value = state.powerUpSettings.stopCard.maxUses;
+        if(state.powerUpSettings.doubleRisk) {
+            document.getElementById('setting-doublerisk-uses').value = state.powerUpSettings.doubleRisk.maxUses;
+            document.getElementById('setting-doublerisk-penalty').value = state.powerUpSettings.doubleRisk.penalty;
+        }
     }
     
     renderHostScores(state.scores);
@@ -207,12 +242,14 @@ socket.on('settings_synced', function(state) {
     serverScoresCache = state.scores;
     document.getElementById('setting-default-time').value = state.defaultTime;
     
-    if (state.powerUpSettings && state.powerUpSettings.extraTime) {
-        document.getElementById('setting-extratime-uses').value = state.powerUpSettings.extraTime.maxUses;
-        document.getElementById('setting-extratime-value').value = state.powerUpSettings.extraTime.value;
-    }
-    if (state.powerUpSettings && state.powerUpSettings.stopCard) {
-        document.getElementById('setting-stopcard-uses').value = state.powerUpSettings.stopCard.maxUses;
+    if (state.powerUpSettings) {
+        if(state.powerUpSettings.extraTime) document.getElementById('setting-extratime-uses').value = state.powerUpSettings.extraTime.maxUses;
+        if(state.powerUpSettings.extraTime) document.getElementById('setting-extratime-value').value = state.powerUpSettings.extraTime.value;
+        if(state.powerUpSettings.stopCard) document.getElementById('setting-stopcard-uses').value = state.powerUpSettings.stopCard.maxUses;
+        if(state.powerUpSettings.doubleRisk) {
+            document.getElementById('setting-doublerisk-uses').value = state.powerUpSettings.doubleRisk.maxUses;
+            document.getElementById('setting-doublerisk-penalty').value = state.powerUpSettings.doubleRisk.penalty;
+        }
     }
     
     renderUIBasedOnActiveAlliances(state.activeAlliances);
@@ -220,11 +257,10 @@ socket.on('settings_synced', function(state) {
     recalculateScores();
 });
 
-socket.on('model_answers_updated', function(answers) {
-    hostModelAnswers = answers; recalculateScores();
-});
+socket.on('model_answers_updated', function(answers) { hostModelAnswers = answers; recalculateScores(); });
 
 socket.on('round_started', function(state) {
+    currentGameState = state;
     document.getElementById('host-round-override').value = state.nextRoundTime;
     ['Red', 'Blue', 'Yellow', 'Green'].forEach(color => {
         const card = document.getElementById('h-timer-' + color);
@@ -232,7 +268,6 @@ socket.on('round_started', function(state) {
         const element = document.getElementById('time-' + color);
         if (element) element.innerText = state.nextRoundTime;
     });
-
     currentSubmissions = []; hostModelAnswers = [];
     renderQueue([]); updateSmartButtonUI('COUNTDOWN'); recalculateScores();
     renderUIBasedOnActiveAlliances(state.activeAlliances);
@@ -254,6 +289,7 @@ socket.on('timer_tick', function(data) {
 });
 
 socket.on('round_stopped', function(state) {
+    currentGameState = state;
     document.getElementById('host-round-override').value = state.nextRoundTime;
     ['Red', 'Blue', 'Yellow', 'Green'].forEach(color => {
         const card = document.getElementById('h-timer-' + color);
@@ -272,7 +308,10 @@ socket.on('answers_released', function(data) {
 });
 
 socket.on('powerup_activated', function(data) {
-    currentGameState = data.gameState; renderHostScores(data.gameState.scores);
+    currentGameState = data.gameState; 
+    renderHostScores(data.gameState.scores);
+    if(currentSubmissions.length > 0) renderQueue(currentSubmissions);
+    recalculateScores();
 });
 
 function renderHostScores(scores) {
@@ -282,11 +321,6 @@ function renderHostScores(scores) {
 
     for (const color in scores) {
         const isHidden = !globalActiveAlliances.includes(color) ? 'style="display:none;"' : '';
-        let currentRemaining = 0;
-        if (hasPowerUpData && currentGameState.teamPowerUps[color] && currentGameState.teamPowerUps[color].extraTime) {
-            currentRemaining = currentGameState.teamPowerUps[color].extraTime.remaining;
-        }
-
         html += '<div class="score-edit-row" id="row-wrapper-' + color + '" ' + isHidden + ' style="gap:10px;">' +
                     '<div style="flex:1; display:flex; flex-direction:column; gap:2px;">' +
                         '<span style="font-weight:bold;">' + color + ' Team </span>' +
@@ -308,14 +342,8 @@ function renderQueue(submissions) {
     let html = '';
     submissions.forEach(function(sub, index) {
         let colorHex = '#28a745';
-        if (sub.alliance === 'Red') colorHex = '#dc3545'; if (sub.alliance === 'Blue') colorHex = '#007bff'; if (sub.alliance === 'Yellow') colorHex = '#ffc107';
-        const displayAns = sub.answers.length > 0 ? sub.answers.join(', ') : 'None of the above';
+        if (sub.alliance === 'Red') colorHex = '#007bff'; if (sub.alliance === 'Blue') colorHex = '#dc3545'; if (sub.alliance === 'Yellow') colorHex = '#ffc107';
+        const logTag = sub.powerUsed ? sub.powerUsed : "";
         
         html += '<div class="queue-item" style="border-left: 6px solid ' + colorHex + '; padding: 12px; margin-bottom: 10px; background: #2a2a2a; border-radius: 6px;">' +
-                    '<div style="margin-bottom: 4px;"><strong>#' + (index + 1) + ' ' + sub.alliance + ' Alliance</strong></div>' +
-                    '<div style="font-size: 14px; color: #b3b3b3; margin-bottom: 4px;">Selected: <span style="color: #fff; font-weight: bold;">[' + displayAns + ']</span></div>' +
-                    '<div style="font-size: 11px; color: #777777;">Logged Timestamp: ' + sub.time + '</div>' +
-                '</div>';
-    });
-    container.innerHTML = html;
-}
+'#' + (index + 1) + ' ' + sub.alliance + ' Alliance ' + logTag + '' +'Selected: [' + sub.answers.join(', ') + ']' +'Precision Logged: ' + sub.time + '' +'';});container.innerHTML = html;}
