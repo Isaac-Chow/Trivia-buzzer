@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Show Scoreboard Display</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="./scores.css">
+</head>
+<body>
+
+    <div class="scoreboard-container">
+        <h1>🏆 LEADERBOARD DISPLAY</h1>
+        <h2 id="display-status">Waiting for round to begin...</h2>
+
+        <!-- DYNAMIC TEAM STANDINGS GRID BOXES -->
+        <div class="scoreboard-grid" id="alliances-board-grid">
+            <!-- Team Rows with Point Counters and Selections Inject Here Live -->
+        </div>
+    </div>
+
+    <script src="./scores.js"></script>
+</body>
+</html>

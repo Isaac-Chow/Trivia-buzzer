@@ -273,5 +273,8 @@ io.on('connection', (socket) => {
         checkAutoStopConditions();
     });
 });
+app.get('/scores', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'scores.html'));
+});
 
 server.listen(PORT, () => { console.log(`Server running on port ${PORT}`); });
